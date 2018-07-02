@@ -67,6 +67,8 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  double lambda_aug_;
+
 
   /**
    * Constructor
@@ -102,6 +104,8 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+  void NormalizeAngle(double& phi);
 };
 
 #endif /* UKF_H */

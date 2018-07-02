@@ -24,6 +24,9 @@ public:
   */
   VectorXd CalculateRMSE(const vector<VectorXd> &estimations, const vector<VectorXd> &ground_truth);
 
+  // Keeps track of rmse so far
+  VectorXd rmse;
+
 };
 
 #endif /* TOOLS_H_ */
