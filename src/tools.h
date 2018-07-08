@@ -27,6 +27,9 @@ public:
   // Keeps track of rmse so far
   VectorXd rmse;
 
+  double prevVx;
+  double prevVy;
+
 };
 
 #endif /* TOOLS_H_ */

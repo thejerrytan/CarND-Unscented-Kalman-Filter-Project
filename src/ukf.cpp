@@ -1,7 +1,9 @@
 #include "ukf.h"
 #include "Eigen/Dense"
 #include <iostream>
+#include "matplotlibcpp.h"
 
+namespace plt = matplotlibcpp;
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -25,10 +27,10 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 9;
+  std_a_ = 1.5;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 6;
+  std_yawdd_ = 0.4;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
@@ -66,6 +68,13 @@ UKF::UKF() {
     weights_(i) = weight;
   }
   Xsig_pred_ = MatrixXd::Zero(n_x_, 2 * n_aug_ + 1);
+
+  NIS_lidar_above_thres = 0;
+  NIS_radar_above_thres = 0;
+  NIS_lidar_measurement_num = 0;
+  NIS_radar_measurement_num = 0;
+  NIS_lidar_thres_list = vector<double>(N, NIS_lidar_thres);
+  NIS_radar_thres_list = vector<double>(N, NIS_radar_thres);
 }
 
 UKF::~UKF() {}
@@ -85,26 +94,40 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
     if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
       float r = meas_package.raw_measurements_(0);
       float phi = meas_package.raw_measurements_(1);
+      // float rdot = meas_package.raw_measurements_(2);
       float px = r * cos(phi);
       float py = r * sin(phi);
       x_ << px, py, 0, 0, 0;
+      P_(0,0) = (std_radr_ * std_radr_); // maximum uncertainty of x occurs when we assume cos(phi) = 1, i.e. object is head-on or perpendicular to radar
+      P_(1,1) = (std_radr_ * std_radr_); // same reasoning as above
+      // worst case uncertainty in velocity happens when we assume the tangential velocity = radial velocity as measured by the radar
+      P_(2,2) = (std_radrd_ * std_radrd_);
+      P_(3,3) = std_radphi_ * std_radphi_;
+      P_(4,4) = 1.57 / 2; // upper bound of uncertainty in phi dot should be used here
 
     } else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
-      x_ << meas_package.raw_measurements_(0), meas_package.raw_measurements_(1), 0, 0, 0;
+      float x = meas_package.raw_measurements_(0); 
+      float y = meas_package.raw_measurements_(1);
+      x_ <<  x, y, 0, 0, 0;
+      P_(0,0) = std_laspx_ * std_laspx_;
+      P_(1,1) = std_laspy_ * std_laspy_;
+      P_(2,2) = 1; // default to 1 when we don't have a better guess
+      P_(3,3) = 1;
+      P_(4,4) = 1.57 / 2; // upper bound of uncertainty in phi dot
 
     }
 
-    P_ = MatrixXd::Identity(5,5);
+    // P_ = MatrixXd::Identity(5,5);
     time_us_ = meas_package.timestamp_;
     is_initialized_ = true;
     
     return;
-  } 
+  }
 
   // Predict
   float dt = (meas_package.timestamp_ - time_us_) / 1000000.0;
+  time_us_ = meas_package.timestamp_;
   Prediction(dt);
-
 
   // Update
   if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
@@ -230,7 +253,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     double p_y = Xsig_pred_(1,i);
 
     Zsig(0,i) = p_x;
-    Zsig(0,i) = p_y;
+    Zsig(1,i) = p_y;
   }
 
   // mean predicted measurement
@@ -250,9 +273,8 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
   // add measurement noise covariance matrix
   MatrixXd R = MatrixXd(n_z, n_z);
-  R << std_radr_ * std_radr_, 0, 0,
-       0, std_radphi_ * std_radphi_, 0,
-       0, 0, std_radrd_ * std_radrd_;
+  R << std_laspx_ * std_laspx_, 0,
+       0, std_laspy_ * std_laspy_;
   S = S + R;
 
   // Cross correlation matrix
@@ -278,7 +300,12 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   P_ = P_ - K * S * K.transpose();
 
   // Calculate Lidar NIS
+  float eta = z_diff.transpose() * S.inverse() * z_diff;
+  if (eta > NIS_lidar_thres) NIS_lidar_above_thres++;
+  NIS_lidar_measurement_num++;
 
+  NIS_lidar_history.push_back(eta);
+  if (NIS_lidar_measurement_num % 30 == 0 && NIS_lidar_measurement_num != 0) DrawNIS(true); // redraw for every 30 new datapoints
 }
 
 /**
@@ -310,7 +337,11 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
     Zsig(0,i) = sqrt(p_x * p_x + p_y * p_y);       // r
     Zsig(1,i) = atan2(p_y, p_x);                   // phi
-    Zsig(2,i) = (p_x * v1 + p_y * v2) / Zsig(0,i); // r_dot TODO: Handle divisionByZero
+    if (fabs(Zsig(0,i) < 0.01)) {                  // rdot, handle divisionByZero
+      Zsig(2,i) = (p_x * v1 + p_y * v2) / 0.01;
+    } else {
+      Zsig(2,i) = (p_x * v1 + p_y * v2) / Zsig(0,i);
+    }
   }
 
   // mean predicted measurement
@@ -361,9 +392,48 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   P_ = P_ - K * S * K.transpose();
 
   // Calculate Radar NIS
+  float eta = z_diff.transpose() * S.inverse() * z_diff;
+  if (eta > NIS_radar_thres) NIS_radar_above_thres++;
+  NIS_radar_measurement_num++;
 
+  NIS_radar_history.push_back(eta);
+  if (NIS_radar_measurement_num % 30 == 0 && NIS_radar_measurement_num != 0) DrawNIS(false); // redraw for every 30 new datapoints
 }
 
 void UKF::NormalizeAngle(double& phi) {
   phi = atan2(sin(phi), cos(phi));
+}
+
+float UKF::GetRadarNISPercentageAboveThres() {
+  if (NIS_radar_measurement_num == 0) {
+    return NIS_radar_above_thres;
+  } else {
+    return (NIS_radar_above_thres * 1.0f / NIS_radar_measurement_num);
+  }
+}
+
+float UKF::GetLidarNISPercentageAboveThres() {
+  if (NIS_lidar_measurement_num == 0) {
+    return NIS_lidar_above_thres;
+  } else {
+    return (NIS_lidar_above_thres * 1.0f / NIS_lidar_measurement_num);
+  }
+}
+
+void UKF::DrawNIS(bool isLidar) {
+  if (isLidar) {
+    plt::subplot(1,2,0);
+    plt::ylim(0,20);
+    plt::plot(NIS_lidar_history, "b");
+    plt::plot(NIS_lidar_thres_list, "r--");
+    plt::title("Lidar NIS");
+  } else {
+    plt::subplot(1,2,1);
+    plt::ylim(0,20);
+    plt::plot(NIS_radar_history, "b");
+    plt::plot(NIS_radar_thres_list, "r--");
+    plt::title("Radar NIS");    
+  }
+  plt::draw();
+  plt::pause(0.0005);
 }
