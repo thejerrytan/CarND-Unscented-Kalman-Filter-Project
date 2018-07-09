@@ -86,12 +86,6 @@ public:
   double NIS_lidar_thres = 5.991; // chi-squared distribution for 0.050 with 2 degrees of freedom
   double NIS_radar_thres = 7.815; // chi-squared distribution for 0.050 with 3 degrees of freedom
 
-  int N = 250; // total num of datapoints expected
-  std::vector<double> NIS_lidar_history;
-  std::vector<double> NIS_radar_history;
-  std::vector<double> NIS_lidar_thres_list;
-  std::vector<double> NIS_radar_thres_list;
-
   /**
    * Constructor
    */
@@ -138,10 +132,6 @@ public:
    * Returns the percentage of NIS values for radar above threshold
    */
   float GetLidarNISPercentageAboveThres();
-
-  /**
-   */
-  void DrawNIS(bool isLidar);
 };
 
 #endif /* UKF_H */

@@ -4,9 +4,7 @@
 #include <math.h>
 #include "ukf.h"
 #include "tools.h"
-#include "matplotlibcpp.h"
 
-namespace plt = matplotlibcpp;
 using namespace std;
 
 // for convenience
@@ -30,11 +28,6 @@ std::string hasData(std::string s) {
 
 int main()
 {
-  // init matplotlib
-  plt::ion();
-  plt::figure_size(1200, 600);
-  plt::show();
-
   uWS::Hub h;
 
   // Create a Kalman Filter instance
