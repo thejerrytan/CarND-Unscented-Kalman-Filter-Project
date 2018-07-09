@@ -60,6 +60,8 @@ UKF::UKF() {
   n_aug_ = 7;
   lambda_ = 3 - n_x_;
   lambda_aug_ = 3 - n_aug_;
+
+  // init sigma points weights
   weights_ = VectorXd(2 * n_aug_ + 1);
   double weight_0 = lambda_aug_ / (lambda_aug_ + n_aug_);
   weights_(0) = weight_0;
@@ -69,12 +71,27 @@ UKF::UKF() {
   }
   Xsig_pred_ = MatrixXd::Zero(n_x_, 2 * n_aug_ + 1);
 
+  // Initialize NIS values
   NIS_lidar_above_thres = 0;
   NIS_radar_above_thres = 0;
   NIS_lidar_measurement_num = 0;
   NIS_radar_measurement_num = 0;
   NIS_lidar_thres_list = vector<double>(N, NIS_lidar_thres);
   NIS_radar_thres_list = vector<double>(N, NIS_radar_thres);
+
+  // Initialize sensor noise covariance matrices
+  R_radar_ = MatrixXd(3,3);
+  R_radar_ << std_radr_ * std_radr_, 0, 0,
+       0, std_radphi_ * std_radphi_, 0,
+       0, 0, std_radrd_ * std_radrd_;
+  R_lidar_ = MatrixXd(2,2);
+  R_lidar_ << std_laspx_ * std_laspx_, 0,
+       0, std_laspy_ * std_laspy_;
+
+  // Process noise covariance matrix
+  Q_ = MatrixXd(2,2);
+  Q_ << std_a_ * std_a_, 0,
+       0, std_yawdd_ * std_yawdd_;
 }
 
 UKF::~UKF() {}
@@ -166,8 +183,9 @@ void UKF::Prediction(double delta_t) {
 
   P_aug.fill(0.0);
   P_aug.topLeftCorner(5,5) = P_;
-  P_aug(5,5) = std_a_ * std_a_;
-  P_aug(6,6) = std_yawdd_ * std_yawdd_;
+  P_aug.bottomRightCorner(2,2) = Q_;
+  // P_aug(5,5) = std_a_ * std_a_;
+  // P_aug(6,6) = std_yawdd_ * std_yawdd_;
 
   // Create square root matrix
   MatrixXd L = P_aug.llt().matrixL();
@@ -180,15 +198,15 @@ void UKF::Prediction(double delta_t) {
   }
 
   // predict sigma points
-  double t2 = delta_t * delta_t;
+  const double t2 = delta_t * delta_t;
   for(int i = 0; i < 2 * n_aug_ + 1; i++) {
-    double px = Xsig_aug.col(i)(0);
-    double py = Xsig_aug.col(i)(1);
-    double v = Xsig_aug.col(i)(2);
-    double psi = Xsig_aug.col(i)(3);
-    double psi_dot = Xsig_aug.col(i)(4);
-    double nu_a = Xsig_aug.col(i)(5);
-    double nu_psi_dot_dot = Xsig_aug.col(i)(6);
+    const double px = Xsig_aug.col(i)(0);
+    const double py = Xsig_aug.col(i)(1);
+    const double v = Xsig_aug.col(i)(2);
+    const double psi = Xsig_aug.col(i)(3);
+    const double psi_dot = Xsig_aug.col(i)(4);
+    const double nu_a = Xsig_aug.col(i)(5);
+    const double nu_psi_dot_dot = Xsig_aug.col(i)(6);
     double new_px, new_py, new_v, new_psi, new_psi_dot;
     VectorXd new_x = VectorXd(5);
     if (fabs(psi_dot) < 0.001) {
@@ -272,10 +290,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   }
 
   // add measurement noise covariance matrix
-  MatrixXd R = MatrixXd(n_z, n_z);
-  R << std_laspx_ * std_laspx_, 0,
-       0, std_laspy_ * std_laspy_;
-  S = S + R;
+  S = S + R_lidar_;
 
   // Cross correlation matrix
   MatrixXd Tc = MatrixXd(n_x_, n_z);
@@ -361,11 +376,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   }
 
   // add measurement noise covariance matrix
-  MatrixXd R = MatrixXd(n_z, n_z);
-  R << std_radr_ * std_radr_, 0, 0,
-       0, std_radphi_ * std_radphi_, 0,
-       0, 0, std_radrd_ * std_radrd_;
-  S = S + R;
+  S = S + R_radar_;
 
   // Cross correlation matrix
   MatrixXd Tc = MatrixXd(n_x_, n_z);
