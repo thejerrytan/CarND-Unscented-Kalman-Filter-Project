@@ -21,9 +21,4 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 add_executable(UnscentedKF ${sources})
-
-find_package(PythonLibs 2.7)
-add_definitions(-DWITHOUT_NUMPY)
-target_include_directories(UnscentedKF PRIVATE ${PYTHON_INCLUDE_DIRS})
-target_link_libraries(UnscentedKF ${PYTHON_LIBRARIES})
 target_link_libraries(UnscentedKF z ssl uv uWS)
