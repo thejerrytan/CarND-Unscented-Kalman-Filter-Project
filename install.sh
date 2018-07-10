@@ -2,7 +2,7 @@
 
 # update and download python and library headers
 apt-get update
-apt-get install python-matplotlib python-numpy python2.7-dev
+apt-get install -y python-matplotlib python-numpy python2.7-dev
 
 rm -rf ./build
 mkdir build
