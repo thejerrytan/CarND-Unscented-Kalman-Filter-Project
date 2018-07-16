@@ -1,9 +1,7 @@
 #include "ukf.h"
 #include "Eigen/Dense"
 #include <iostream>
-#include "matplotlibcpp.h"
 
-namespace plt = matplotlibcpp;
 using namespace std;
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -76,8 +74,6 @@ UKF::UKF() {
   NIS_radar_above_thres = 0;
   NIS_lidar_measurement_num = 0;
   NIS_radar_measurement_num = 0;
-  NIS_lidar_thres_list = vector<double>(N, NIS_lidar_thres);
-  NIS_radar_thres_list = vector<double>(N, NIS_radar_thres);
 
   // Initialize sensor noise covariance matrices
   R_radar_ = MatrixXd(3,3);
@@ -184,8 +180,6 @@ void UKF::Prediction(double delta_t) {
   P_aug.fill(0.0);
   P_aug.topLeftCorner(5,5) = P_;
   P_aug.bottomRightCorner(2,2) = Q_;
-  // P_aug(5,5) = std_a_ * std_a_;
-  // P_aug(6,6) = std_yawdd_ * std_yawdd_;
 
   // Create square root matrix
   MatrixXd L = P_aug.llt().matrixL();
@@ -318,9 +312,6 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   float eta = z_diff.transpose() * S.inverse() * z_diff;
   if (eta > NIS_lidar_thres) NIS_lidar_above_thres++;
   NIS_lidar_measurement_num++;
-
-  NIS_lidar_history.push_back(eta);
-  if (NIS_lidar_measurement_num % 30 == 0 && NIS_lidar_measurement_num != 0) DrawNIS(true); // redraw for every 30 new datapoints
 }
 
 /**
@@ -406,9 +397,6 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   float eta = z_diff.transpose() * S.inverse() * z_diff;
   if (eta > NIS_radar_thres) NIS_radar_above_thres++;
   NIS_radar_measurement_num++;
-
-  NIS_radar_history.push_back(eta);
-  if (NIS_radar_measurement_num % 30 == 0 && NIS_radar_measurement_num != 0) DrawNIS(false); // redraw for every 30 new datapoints
 }
 
 void UKF::NormalizeAngle(double& phi) {
@@ -429,22 +417,4 @@ float UKF::GetLidarNISPercentageAboveThres() {
   } else {
     return (NIS_lidar_above_thres * 1.0f / NIS_lidar_measurement_num);
   }
-}
-
-void UKF::DrawNIS(bool isLidar) {
-  if (isLidar) {
-    plt::subplot(1,2,0);
-    plt::ylim(0,20);
-    plt::plot(NIS_lidar_history, "b");
-    plt::plot(NIS_lidar_thres_list, "r--");
-    plt::title("Lidar NIS");
-  } else {
-    plt::subplot(1,2,1);
-    plt::ylim(0,20);
-    plt::plot(NIS_radar_history, "b");
-    plt::plot(NIS_radar_thres_list, "r--");
-    plt::title("Radar NIS");    
-  }
-  plt::draw();
-  plt::pause(0.0005);
 }
