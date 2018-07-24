@@ -31,13 +31,6 @@ VectorXd Tools::CalculateRMSE(const vector<VectorXd> &estimations,
   rmse = sumOfSquares / estimations.size();
   rmse = rmse.array().sqrt();
 
-  // cout << "RMSE = " << endl << rmse << endl;
-
-  // cout << "Change in vx = " << ground_truth[lastIdx](2) - prevVx << endl;
-  // cout << "Change in vy = " << ground_truth[lastIdx](3) - prevVy << endl;
-
-  prevVx = ground_truth[lastIdx](2);
-  prevVy = ground_truth[lastIdx](3);
-
+  cout << "RMSE = " << endl << rmse << endl;
   return rmse;
 }
