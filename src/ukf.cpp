@@ -12,6 +12,8 @@ using std::vector;
  * This is scaffolding, do not modify
  */
 UKF::UKF() {
+  is_initialized_ = false;
+  
   // if this is false, laser measurements will be ignored (except during init)
   use_laser_ = true;
 
@@ -22,7 +24,7 @@ UKF::UKF() {
   x_ = VectorXd(5);
 
   // initial covariance matrix
-  P_ = MatrixXd(5, 5);
+  P_ = MatrixXd::Zero(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
   std_a_ = 1.5;
@@ -116,7 +118,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       // worst case uncertainty in velocity happens when we assume the tangential velocity = radial velocity as measured by the radar
       P_(2,2) = (std_radrd_ * std_radrd_);
       P_(3,3) = std_radphi_ * std_radphi_;
-      P_(4,4) = 1.57 / 2; // upper bound of uncertainty in phi dot should be used here
+      P_(4,4) = 0.785; // upper bound of uncertainty in phi dot should be used here
 
     } else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
       float x = meas_package.raw_measurements_(0); 
@@ -126,14 +128,12 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       P_(1,1) = std_laspy_ * std_laspy_;
       P_(2,2) = 1; // default to 1 when we don't have a better guess
       P_(3,3) = 1;
-      P_(4,4) = 1.57 / 2; // upper bound of uncertainty in phi dot
+      P_(4,4) = 0.785; // upper bound of uncertainty in phi dot
 
     }
 
-    // P_ = MatrixXd::Identity(5,5);
     time_us_ = meas_package.timestamp_;
     is_initialized_ = true;
-    
     return;
   }
 
@@ -203,7 +203,7 @@ void UKF::Prediction(double delta_t) {
     const double nu_psi_dot_dot = Xsig_aug.col(i)(6);
     double new_px, new_py, new_v, new_psi, new_psi_dot;
     VectorXd new_x = VectorXd(5);
-    if (fabs(psi_dot) < 0.001) {
+    if (fabs(psi_dot) < 0.00001) {
         new_px = px + v*cos(psi)*delta_t + 0.5*t2*cos(psi)*nu_a;
         new_py = py + v*sin(psi)*delta_t + 0.5*t2*sin(psi)*nu_a;
         new_v = v + delta_t*nu_a;
